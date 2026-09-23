@@ -74,10 +74,21 @@ sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-i
 curl -s -X POST \
   "http://localhost:8085/v1/projects/local-debezium/subscriptions/db-inventory.inventory.customers:pull" \
   -H "Content-Type: application/json" \
-  -d '{"maxMessages":10}'
+  -d '{"maxMessages":10}' \
+| python3 -c '
+import json, sys, base64
+data = json.load(sys.stdin)
+for message in data.get("receivedMessages", []):
+    payload = json.loads(base64.b64decode(message["message"]["data"]))["payload"]
+    print(json.dumps({
+        "op": payload.get("op"),
+        "before": payload.get("before"),
+        "after": payload.get("after"),
+    }, indent=2))
+'
 ```
 
-A new row is an event with `"op":"c"`. The first snapshot of existing rows uses `"op":"r"`.
+The emulator returns each payload in `message.data` as base64. The Python above decodes it. `op` is `c` for a new row and `r` for a row from the first snapshot. `after` is the row Debezium sent.
 
 ## Pub/Sub topics
 

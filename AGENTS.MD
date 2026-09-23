@@ -5,13 +5,13 @@ PoC that streams PostgreSQL changes to Pub/Sub with [Debezium Server](https://de
 ## Scope
 
 - Change the PoC, its Compose file, docs, and the Cursor commands under `.cursor/commands/`.
-- The default stack uses the Pub/Sub emulator (`docker-compose.yml` alone). Real GCP is `docker-compose.gcp.yml` plus `postgresql-debezium/.env`. Resources (project, Pub/Sub API, BigQuery API, topics, BigQuery dataset/table/view, BigQuery subscription, service account, JSON key) are created in the console. Keep `README.md` as the source of those steps. The key file is `postgresql-debezium/keys/gcp-sa.json`.
+- The default stack uses the Pub/Sub emulator (`docker-compose.yml` alone). The complete path is documented step by step in `README.md`: `scripts/gcp-setup.sh` creates the five topics, `docker-compose.gcp.yml` points Debezium at the project, and `scripts/gcp-show.sh` prints the BigQuery rows and the notify log. Four topics have one pull subscription. `db-inventory.inventory.customers` has the BigQuery subscription and the notify push subscription. `GCP_CREDENTIALS_FILE` in `postgresql-debezium/gcp.env` is the publisher credential. It is a service account key when the project allows one, and the signed-in user's application-default credentials when key creation is blocked.
 - `infra/` is leftover Pulumi and Cloud Build from another approach. Leave it untouched until the user asks to delete it. Do not import it, extend it, or add Pulumi, Terraform, or another deploy pipeline.
 - `__main__.py` only starts that leftover Pulumi program. Do not grow it.
 
 ## Secrets
 
-Never commit `keys/`, service-account JSON, `.env`, or credentials. `.gitignore` already ignores `keys/`. A real GCP project mounts `postgresql-debezium/keys` at `/keys` inside the Debezium container. The emulator path does not use a key.
+Never commit `keys/`, service-account JSON, `postgresql-debezium/gcp.env`, or credentials. `.gitignore` already ignores `keys/` and `gcp.env`. A real GCP project mounts `postgresql-debezium/keys` at `/keys` inside the Debezium container. The emulator path does not use a key.
 
 ## Trunk-based development
 
@@ -46,7 +46,7 @@ These commands were copied from another repo and adapted here:
 
 ## Versions
 
-[Semantic versioning](https://semver.org/). Current version is in `version.txt` and the `Version:` line in `README.md`. `bumpversion` also rewrites `setup.py`.
+[Semantic versioning](https://semver.org/). Current version is in `version.txt` and the `Version:` line in `README.md`. `bumpversion` rewrites those files and `.bumpversion.cfg`.
 
 - `patch` — fixes and small wording
 - `minor` — a new deliverable or an architecture decision
@@ -60,4 +60,4 @@ Format PoC Python with `.venv/bin/autopep8` and check it with `.venv/bin/mypy` b
 
 ## When docs and Compose drift
 
-Topic names are `{topic.prefix}.{schema}.{table}` with prefix `db-inventory` and schema `inventory`. The captured tables are `customers`, `geom`, `orders`, `products`, and `products_on_hand`. If a table, the project id, or the key path changes, update `postgresql-debezium/docker-compose.yml`, `postgresql-debezium/docker-compose.gcp.yml`, `postgresql-debezium/init-pubsub.sh`, and `README.md` together.
+Topic names are `{topic.prefix}.{schema}.{table}` with prefix `db-inventory` and schema `inventory`. The captured tables are `customers`, `geom`, `orders`, `products`, and `products_on_hand`. Only `customers` has two subscriptions. If a table, the project id, or the key path changes, update `postgresql-debezium/docker-compose.yml`, `postgresql-debezium/docker-compose.gcp.yml`, `postgresql-debezium/init-pubsub.sh`, `scripts/gcp-setup.sh`, and `README.md` together.

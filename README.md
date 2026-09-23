@@ -33,7 +33,7 @@ python3 -m venv .venv
 From the project root:
 
 ```
-docker compose -f postgresql-debezium/docker-compose.yml up
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml up"
 ```
 
 Compose starts five pieces:
@@ -47,7 +47,7 @@ Compose starts five pieces:
 Wait until the Debezium log says `Processing messages`:
 
 ```
-docker compose -f postgresql-debezium/docker-compose.yml logs -f debezium
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml logs -f debezium"
 ```
 
 The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
@@ -66,12 +66,10 @@ Open Adminer at `http://localhost:8080` and log in with:
 
 After login choose `Schema -> inventory`.
 
-To confirm a change from the shell:
+To confirm a change from the shell, run Compose against the `db-inventory` service. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket.
 
 ```
-docker exec postgresql-debezium-db-inventory-1 \
-  psql -U postgres -d postgres \
-  -c "INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');"
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
 
 curl -s -X POST \
   "http://localhost:8085/v1/projects/local-debezium/subscriptions/db-inventory.inventory.customers:pull" \

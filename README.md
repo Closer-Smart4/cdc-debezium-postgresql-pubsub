@@ -21,6 +21,12 @@ GCP is set up by hand in the Cloud Console. The `infra/` folder is leftover from
 
 - Docker, with Compose (`docker-compose` or `docker compose`)
 - A Google Cloud project where you can enable APIs, create Pub/Sub resources, and create a service account
+- A project virtual environment named `.venv`:
+
+```
+python3 -m venv .venv
+.venv/bin/pip install bumpversion mypy types-setuptools autopep8
+```
 
 ## Set up GCP in the console
 
@@ -109,7 +115,7 @@ Agent rules for this repo are in `AGENTS.MD`.
 This repo uses [semantic versioning](https://semver.org/). Every pull request bumps the version with [bumpversion](https://pypi.org/project/bumpversion/):
 
 ```
-bumpversion --config-file .bumpversion.cfg major|minor|patch
+.venv/bin/bumpversion --config-file .bumpversion.cfg major|minor|patch
 ```
 
 `patch` is a fix or small wording change, `minor` is a new deliverable, and `major` is a breaking change. The command rewrites `version.txt`, the `Version:` line in this file, `.bumpversion.cfg`, and `setup.py`. Do not edit those version numbers by hand.
@@ -131,7 +137,7 @@ for more information.
 Format PoC Python with [autopep8](https://pypi.org/project/autopep8/) from the project root, for example:
 
 ```
-autopep8 --in-place --exit-code --verbose path/to/module.py
+.venv/bin/autopep8 --in-place --exit-code --verbose path/to/module.py
 ```
 
 It reformats code non-aggressively. Skip `infra/` until that folder is deleted.
@@ -141,7 +147,7 @@ It reformats code non-aggressively. Skip `infra/` until that folder is deleted.
 Type check PoC Python with [mypy](http://www.mypy-lang.org/) from the project root:
 
 ```
-mypy path/to/module.py
+.venv/bin/mypy path/to/module.py
 ```
 
 Skip `infra/`. New Python in this repo is type-annotated.

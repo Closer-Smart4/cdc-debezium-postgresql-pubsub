@@ -1,4 +1,5 @@
 /.pytest_cache/
+.mypy_cache/
 __pycache__/
 
 *.py[cod]
@@ -19,7 +20,7 @@ workspace.code-workspace
 .vscode/settings.json
 
 # virtual environment
-/venv/
+.venv/
 
 # pydoc-markdown
 docs/mkdocs.yml

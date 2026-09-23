@@ -40,9 +40,9 @@ Follow the command file that matches the user's slash command. Shared rules:
 
 These commands were copied from another repo and adapted here:
 
-- Version bumps use `bumpversion --config-file .bumpversion.cfg <part>`.
+- Version bumps use `.venv/bin/bumpversion --config-file .bumpversion.cfg <part>`. Python tools run from the project `.venv`.
 - An origin authentication failure stops the command. Leave git config and SSH keys as they are.
-- `mypy` applies to PoC Python. Skip `infra/`.
+- `.venv/bin/mypy` applies to PoC Python. Skip `infra/`.
 
 ## Versions
 
@@ -56,7 +56,7 @@ Every pull request includes one bump, made by bumpversion, not by hand. If sever
 
 ## Python
 
-Format PoC Python with `autopep8` and check it with `mypy` before committing. Type-annotate new Python. Do not format or type-check `infra/`.
+Format PoC Python with `.venv/bin/autopep8` and check it with `.venv/bin/mypy` before committing. Type-annotate new Python. Do not format or type-check `infra/`.
 
 ## When docs and Compose drift
 

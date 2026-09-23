@@ -52,7 +52,7 @@ Read every commit and the full diff against the default branch. Draft:
 - [ ] <checklist of what to verify>
 ```
 
-Mention the version bump (`x.y.z` → `x.y.z`) when version files changed. If the branch did not bump the version, warn that every PR must use `bumpversion --config-file .bumpversion.cfg` and stop unless the user already confirmed they want the PR anyway.
+Mention the version bump (`x.y.z` → `x.y.z`) when version files changed. If the branch did not bump the version, warn that every PR must use `.venv/bin/bumpversion --config-file .bumpversion.cfg` and stop unless the user already confirmed they want the PR anyway.
 
 State the title and description, then create the PR. Wait only if the head branch is ambiguous or the diff looks unsafe.
 

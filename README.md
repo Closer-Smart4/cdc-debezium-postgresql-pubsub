@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.5.0
+Version: 0.5.1
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -20,7 +20,7 @@ The Compose file runs a Pub/Sub emulator on your machine, so the example does no
 ## Prerequisites
 
 - Docker Engine and Compose v2 (`docker compose`)
-- Membership in the `docker` group, or use `sudo` for the Compose commands
+- Your user in the `docker` group, so Compose does not use `sudo` and does not ask for a password. On this demo machine `sudo` is passwordless, but the commands below do not call it. If `docker compose` says permission denied, the shell was opened before the group was added; run `newgrp docker` or log in again.
 - A project virtual environment named `.venv`, used for version bumps and Python checks:
 
 ```
@@ -44,7 +44,13 @@ Compose starts five pieces:
 - `pubsub-init` — creates the topics and pull subscriptions, then exits
 - `debezium` — `debezium/server:3.0.0.Final`, which streams the `inventory` schema
 
-Wait until the Debezium log says `Processing messages`. The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
+Wait until the Debezium log says `Processing messages`:
+
+```
+docker compose -f postgresql-debezium/docker-compose.yml logs -f debezium
+```
+
+The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
 
 Debezium reads configuration from environment variables whose names are the property in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
 

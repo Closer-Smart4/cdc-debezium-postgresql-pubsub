@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="PostgerSQL-Debezium-Pub/Sub",
-    version="0.5.0",
+    version="0.5.1",
     author="Ricardo Miranda",
     author_email="mail@ricardoMiranda.com",
     description="PoC for CDC",

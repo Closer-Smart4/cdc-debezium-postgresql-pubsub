@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.5.0
+Version: 0.5.1
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -20,7 +20,7 @@ The Compose file runs a Pub/Sub emulator on your machine, so the example does no
 ## Prerequisites
 
 - Docker Engine and Compose v2 (`docker compose`)
-- Membership in the `docker` group, or use `sudo` for the Compose commands
+- Your user in the `docker` group, so Compose does not use `sudo` and does not ask for a password. On this demo machine `sudo` is passwordless, but the commands below do not call it. If `docker compose` says permission denied, the shell was opened before the group was added; run `newgrp docker` or log in again.
 - A project virtual environment named `.venv`, used for version bumps and Python checks:
 
 ```
@@ -33,7 +33,7 @@ python3 -m venv .venv
 From the project root:
 
 ```
-docker compose -f postgresql-debezium/docker-compose.yml up
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml up"
 ```
 
 Compose starts five pieces:
@@ -44,26 +44,51 @@ Compose starts five pieces:
 - `pubsub-init` — creates the topics and pull subscriptions, then exits
 - `debezium` — `debezium/server:3.0.0.Final`, which streams the `inventory` schema
 
-Wait until the Debezium log says `Processing messages`. The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
+Wait until the Debezium log says `Processing messages`:
+
+```
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml logs -f debezium"
+```
+
+The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
 
 Debezium reads configuration from environment variables whose names are the property in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
 
-To explore the inventory database open `http://localhost:8080` and fill in `System -> PostgreSQL`, `Server -> db-inventory`, `Username -> postgres`, `Password -> example`, and `Database -> postgres`. After login choose `Schema -> inventory`.
+Open Adminer at `http://localhost:8080` and log in with:
 
-To confirm a change from the shell:
+| Field | Value |
+| --- | --- |
+| System | PostgreSQL |
+| Server | `db-inventory` |
+| Username | `postgres` |
+| Password | `example` |
+| Database | `postgres` |
+
+After login choose `Schema -> inventory`.
+
+To confirm a change from the shell, run Compose against the `db-inventory` service. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket.
 
 ```
-docker exec postgresql-debezium-db-inventory-1 \
-  psql -U postgres -d postgres \
-  -c "INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');"
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
 
 curl -s -X POST \
   "http://localhost:8085/v1/projects/local-debezium/subscriptions/db-inventory.inventory.customers:pull" \
   -H "Content-Type: application/json" \
-  -d '{"maxMessages":10}'
+  -d '{"maxMessages":10}' \
+| python3 -c '
+import json, sys, base64
+data = json.load(sys.stdin)
+for message in data.get("receivedMessages", []):
+    payload = json.loads(base64.b64decode(message["message"]["data"]))["payload"]
+    print(json.dumps({
+        "op": payload.get("op"),
+        "before": payload.get("before"),
+        "after": payload.get("after"),
+    }, indent=2))
+'
 ```
 
-A new row is an event with `"op":"c"`. The first snapshot of existing rows uses `"op":"r"`.
+The emulator returns each payload in `message.data` as base64. The Python above decodes it. `op` is `c` for a new row and `r` for a row from the first snapshot. `after` is the row Debezium sent.
 
 ## Pub/Sub topics
 

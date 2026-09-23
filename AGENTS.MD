@@ -1,11 +1,11 @@
 # Agent guide
 
-PoC that streams PostgreSQL changes to Pub/Sub with [Debezium Server](https://debezium.io/documentation/reference/stable/operations/debezium-server.html). The local runtime is Docker Compose in `postgresql-debezium/`, backed by the Pub/Sub emulator. Publishing to a real Google Cloud project is optional and documented in `README.md`.
+PoC that streams PostgreSQL changes to Pub/Sub with [Debezium Server](https://debezium.io/documentation/reference/stable/operations/debezium-server.html). The local runtime is Docker Compose in `postgresql-debezium/`, backed by the Pub/Sub emulator. Publishing to a real Google Cloud project, and from there into BigQuery, is optional and documented in `README.md`.
 
 ## Scope
 
 - Change the PoC, its Compose file, docs, and the Cursor commands under `.cursor/commands/`.
-- The default stack uses the Pub/Sub emulator. Real GCP resources (project, Pub/Sub API, topics, pull subscriptions, service account, JSON key) are created in the console. Keep `README.md` as the source of those steps.
+- The default stack uses the Pub/Sub emulator (`docker-compose.yml` alone). Real GCP is `docker-compose.gcp.yml` plus `postgresql-debezium/.env`. Resources (project, Pub/Sub API, BigQuery API, topics, BigQuery dataset/table/view, BigQuery subscription, service account, JSON key) are created in the console. Keep `README.md` as the source of those steps. The key file is `postgresql-debezium/keys/gcp-sa.json`.
 - `infra/` is leftover Pulumi and Cloud Build from another approach. Leave it untouched until the user asks to delete it. Do not import it, extend it, or add Pulumi, Terraform, or another deploy pipeline.
 - `__main__.py` only starts that leftover Pulumi program. Do not grow it.
 
@@ -60,4 +60,4 @@ Format PoC Python with `.venv/bin/autopep8` and check it with `.venv/bin/mypy` b
 
 ## When docs and Compose drift
 
-Topic names are `{topic.prefix}.{schema}.{table}` with prefix `db-inventory` and schema `inventory`. The captured tables are `customers`, `geom`, `orders`, `products`, and `products_on_hand`. If a table, the project id, or the key path changes, update `postgresql-debezium/docker-compose.yml`, `postgresql-debezium/init-pubsub.sh`, and `README.md` together.
+Topic names are `{topic.prefix}.{schema}.{table}` with prefix `db-inventory` and schema `inventory`. The captured tables are `customers`, `geom`, `orders`, `products`, and `products_on_hand`. If a table, the project id, or the key path changes, update `postgresql-debezium/docker-compose.yml`, `postgresql-debezium/docker-compose.gcp.yml`, `postgresql-debezium/init-pubsub.sh`, and `README.md` together.

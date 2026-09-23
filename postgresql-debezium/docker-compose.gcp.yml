@@ -1,0 +1,20 @@
+# Real Google Cloud Pub/Sub. Use together with docker-compose.yml.
+# The emulator services stay in the base file and remain the default when this
+# file is not passed. Here they are profile-gated so this command does not start them.
+services:
+  pubsub-emulator:
+    profiles: ["emulator"]
+
+  pubsub-init:
+    profiles: ["emulator"]
+
+  debezium:
+    depends_on: !override
+      db-inventory:
+        condition: service_started
+    environment:
+      DEBEZIUM_SINK_PUBSUB_PROJECT_ID: ${GCP_PROJECT_ID:?Set GCP_PROJECT_ID in postgresql-debezium/.env}
+      DEBEZIUM_SINK_PUBSUB_ADDRESS: !reset null
+      GOOGLE_APPLICATION_CREDENTIALS: /keys/gcp-sa.json
+    volumes:
+      - ./keys/gcp-sa.json:/keys/gcp-sa.json:ro

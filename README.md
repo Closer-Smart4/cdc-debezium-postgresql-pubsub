@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.5.1
+Version: 0.6.0
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -104,17 +104,75 @@ Subscriptions keep messages for 7 days. The emulator listens on `localhost:8085`
 
 ## Publish to a Google Cloud project
 
-To send events to a real project instead of the emulator:
+The emulator is still the default. This section is the other option: Debezium publishes to a real Pub/Sub topic, and a BigQuery subscription writes each `customers` change into a table.
+
+You need a Google Cloud project. Create the resources in the console. This repo does not deploy them.
+
+### Console setup
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/), select the project, and copy its **Project ID**.
-2. Go to **APIs & Services → Library**, search for **Cloud Pub/Sub API**, and enable it.
-3. Create each topic in [Pub/Sub topics](#pubsub-topics). For each topic, create a **Pull** subscription with the same id, **Message retention duration** of **7 days**, and **Expiration period** set to **Never expire**.
-4. Go to **IAM & Admin → Service Accounts → Create service account**. Grant **Pub/Sub Publisher** (`roles/pubsub.publisher`). Create a JSON key and save it under `postgresql-debezium/keys/`. That directory is gitignored.
-5. In `postgresql-debezium/docker-compose.yml`, on the `debezium` service:
-   - Set `DEBEZIUM_SINK_PUBSUB_PROJECT_ID` to the Project ID.
-   - Remove `DEBEZIUM_SINK_PUBSUB_ADDRESS`.
-   - Mount the key read-only and set `GOOGLE_APPLICATION_CREDENTIALS` to `/keys/` plus the file name.
-6. Stop the `pubsub-emulator` and `pubsub-init` services, then start Compose again.
+2. Go to **APIs & Services → Library** and enable **Cloud Pub/Sub API** and **BigQuery API**.
+3. Go to **Pub/Sub → Topics** and create one topic for each name in [Pub/Sub topics](#pubsub-topics). Debezium stops if any of those topics is missing. No pull subscription is required for this path.
+4. Go to **IAM & Admin → Service Accounts → Create service account**. Grant **Pub/Sub Publisher** (`roles/pubsub.publisher`). Create a JSON key and save it as `postgresql-debezium/keys/gcp-sa.json`. That directory is gitignored.
+5. Go to **BigQuery** and create a dataset named `debezium_cdc`. Pick the location you want for the demo (for example `EU`).
+6. Open a query in that dataset and run:
+
+```
+CREATE TABLE debezium_cdc.customers_changes (
+  data JSON,
+  subscription_name STRING,
+  message_id STRING,
+  publish_time TIMESTAMP,
+  attributes JSON
+);
+
+CREATE VIEW debezium_cdc.customers AS
+SELECT
+  publish_time,
+  JSON_VALUE(data, '$.payload.op') AS op,
+  JSON_VALUE(data, '$.payload.after.id') AS id,
+  JSON_VALUE(data, '$.payload.after.first_name') AS first_name,
+  JSON_VALUE(data, '$.payload.after.last_name') AS last_name,
+  JSON_VALUE(data, '$.payload.after.email') AS email
+FROM debezium_cdc.customers_changes;
+```
+
+7. Go to **Pub/Sub → Subscriptions → Create subscription**:
+   - **Subscription ID:** `db-inventory.inventory.customers-bq`
+   - **Topic:** `db-inventory.inventory.customers`
+   - **Delivery type:** **Write to BigQuery**
+   - **Table:** `debezium_cdc.customers_changes`
+   - Leave **Use topic schema** and **Use table schema** off. The whole Debezium JSON message is stored in the `data` column.
+   - Turn **Write metadata** on, so `publish_time` is filled.
+   - When the console offers to grant the Pub/Sub service agent access to the table, accept it.
+
+Copy `postgresql-debezium/.env.example` to `postgresql-debezium/.env` and set `GCP_PROJECT_ID` to the Project ID. `.env` is gitignored.
+
+### Run against the project
+
+Stop the emulator stack, then start Compose with both files. The second file points Debezium at the project, mounts the key, and does not start the emulator.
+
+```
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml down"
+sg docker -c "docker compose --env-file postgresql-debezium/.env -f postgresql-debezium/docker-compose.yml -f postgresql-debezium/docker-compose.gcp.yml up"
+```
+
+Wait until the Debezium log says `Processing messages`. A new container has no offset file, so Debezium sends the current `inventory.customers` rows first (`op` = `r`). Then insert a row:
+
+```
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
+```
+
+In the BigQuery console, query the view. A new row has `op` = `c` and the name in `first_name` / `last_name` / `email`.
+
+```
+SELECT *
+FROM debezium_cdc.customers
+ORDER BY publish_time DESC
+LIMIT 20
+```
+
+To go back to the emulator, stop Compose and start the base file only, as in [Running this example](#running-this-example).
 
 ## Trunk-based development
 

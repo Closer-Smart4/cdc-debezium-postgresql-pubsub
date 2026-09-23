@@ -28,3 +28,4 @@ docs/.generated-files.txt
 
 # keys to GOGOLE
 keys/
+.env

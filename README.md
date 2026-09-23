@@ -73,11 +73,9 @@ Open Adminer at `http://localhost:8080` and log in with:
 
 After login choose `Schema -> inventory`.
 
-To confirm a change from the shell, run Compose against the `db-inventory` service. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket.
+Messages are visible on the emulator at `http://localhost:8085`. Pull a subscription and decode `message.data`, which arrives as base64. From the project root:
 
 ```
-sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
-
 curl -s -X POST \
   "http://localhost:8085/v1/projects/local-debezium/subscriptions/db-inventory.inventory.customers:pull" \
   -H "Content-Type: application/json" \
@@ -95,7 +93,21 @@ for message in data.get("receivedMessages", []):
 '
 ```
 
-The emulator returns each payload in `message.data` as base64. The Python above decodes it. `op` is `c` for a new row and `r` for a row from the first snapshot. `after` is the row Debezium sent.
+`op` is `r` for a row from the first snapshot and `c` for a row inserted later. `after` is the row Debezium sent. The first `customers` snapshot looks like this:
+
+| id | name | email |
+| --- | --- | --- |
+| 1001 | Sally Thomas | sally.thomas@acme.com |
+| 1002 | George Bailey | gbailey@foobar.com |
+| 1003 | Edward Walker | ed@walker.com |
+
+The same pull works for the other tables. Change `customers` in the URL to `orders`, `products`, `products_on_hand`, or `geom`.
+
+To confirm a new row, insert through the `db-inventory` service, then pull again. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket. The next pull shows `"op": "c"` and the new name in `after`. The same insert done in Adminer shows up the same way.
+
+```
+sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
+```
 
 ## Pub/Sub topics
 

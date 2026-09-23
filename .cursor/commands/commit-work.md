@@ -9,7 +9,7 @@ Shared rules, origin authentication, fast-forward, and merged-branch cleanup: [s
 ## Extra hard rules
 
 - Stage only named files. No `git add .` / `git add -A`.
-- Do not commit secrets (`.env`, credentials, keys) or `.venv`.
+- Do not commit secrets (`.env`, `postgresql-debezium/gcp.env`, credentials, keys) or `.venv`.
 - Bump versions only with `.venv/bin/bumpversion --config-file .bumpversion.cfg <part>`. Never edit version numbers by hand.
 - PoC Python must be type-annotated. Run `.venv/bin/mypy` on changed Python files before committing them. Skip `infra/`; that tree is obsolete and will be deleted.
 - New slices start from the latest default branch. Do not stack a new branch on another feature branch.
@@ -66,7 +66,7 @@ For each slice, in order:
 1. If not reusing the current unmerged branch: check out `<default-branch>` (clean tree or after stash) and create `git checkout -b <branch-name>` from that tip. Never branch from another feature branch.
 2. Restore only that slice’s files from the stash when a stash was used (`git checkout stash -- <file> ...`).
 3. `.venv/bin/bumpversion --config-file .bumpversion.cfg <part>` (`patch`, `minor`, or `major`). If this branch already has the intended bump for this slice, do not bump again.
-4. Stage only the slice files plus the version files bumpversion rewrites: `version.txt`, `README.md`, `.bumpversion.cfg`, and `setup.py`.
+4. Stage only the slice files plus the version files bumpversion rewrites: `version.txt`, `README.md`, and `.bumpversion.cfg`.
 5. Commit:
 
 ```bash

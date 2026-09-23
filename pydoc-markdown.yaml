@@ -1,0 +1,21 @@
+loaders:
+  - type: python
+    search_path: [,]
+processors:
+  - type: filter
+    skip_empty_modules: true
+  - type: smart
+  - type: crossref
+renderer:
+  type: mkdocs
+  pages:
+  - title: Home
+    name: index
+    source: README.md
+  - title: PoC for Debezium streaming to Pub/Sub
+    contents:
+    - app.*
+  mkdocs_config:
+    site_name: "PoC for Debezium streaming to Pub/Sub"
+    theme: readthedocs
+  output_directory: docs

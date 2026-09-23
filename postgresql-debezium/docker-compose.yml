@@ -1,0 +1,40 @@
+version: '3.1'
+
+services:
+  db-inventory:
+    image: debezium/example-postgres
+    restart: always
+    environment:
+      # Use postgres/example to login
+      POSTGRES_PASSWORD: example
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+  debezium:
+    image: debezium/server
+    restart: always
+    volumes:
+      - ./keys:/keys:ro
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /keys/sa-datapool-prt-dsi-dev.json
+      debezium.sink.type: pubsub
+      debezium.sink.pubsub.project.id: datapool-prt-dsi-dev
+      debezium.sink.pubsub.ordering.enabled: 'false'
+      debezium.source.connector.class: io.debezium.connector.postgresql.PostgresConnector
+      debezium.source.offset.storage.file.filename: data/offsets.dat
+      debezium.source.offset.flush.interval.ms: 0
+      debezium.source.database.hostname: db-inventory
+      debezium.source.database.port: 5432
+      debezium.source.database.user: postgres
+      debezium.source.database.password: example
+      debezium.source.database.dbname: postgres
+      debezium.source.database.server.name: db-inventory
+      debezium.source.schema.include.list: inventory
+
+volumes:
+  keys:
+    driver: local

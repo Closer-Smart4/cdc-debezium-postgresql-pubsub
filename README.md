@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.4.0
+Version: 0.5.0
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -13,90 +13,83 @@ CDC stands for [Change Data Capture](https://en.wikipedia.org/wiki/Change_data_c
 
 ![Architecture](architecture/postgres_debezium_pubsub.png)
 
-Debezium Server reads the PostgreSQL write-ahead log and publishes each change to a Pub/Sub topic named `{server}.{schema}.{table}`. In this PoC the server name is `db-inventory` and the schema is `inventory`.
+Debezium Server reads the PostgreSQL write-ahead log and publishes each change to a Pub/Sub topic named `{topic.prefix}.{schema}.{table}`. In this PoC the topic prefix is `db-inventory` and the schema is `inventory`.
 
-GCP is set up by hand in the Cloud Console. The `infra/` folder is leftover from an earlier Pulumi and Cloud Build setup and will be removed.
+The Compose file runs a Pub/Sub emulator on your machine, so the example does not need a Google Cloud project. The `infra/` folder is leftover from an earlier Pulumi and Cloud Build setup and will be removed.
 
 ## Prerequisites
 
-- Docker, with Compose (`docker-compose` or `docker compose`)
-- A Google Cloud project where you can enable APIs, create Pub/Sub resources, and create a service account
-- A project virtual environment named `.venv`:
+- Docker Engine and Compose v2 (`docker compose`)
+- Membership in the `docker` group, or use `sudo` for the Compose commands
+- A project virtual environment named `.venv`, used for version bumps and Python checks:
 
 ```
 python3 -m venv .venv
 .venv/bin/pip install bumpversion mypy types-setuptools autopep8
 ```
 
-## Set up GCP in the console
-
-Do this before starting Compose. Debezium publishes with a service account that has `Pub/Sub Publisher` only, so the topics and subscriptions must already exist.
-
-### 1. Project and API
-
-1. Open the [Google Cloud Console](https://console.cloud.google.com/) and select the project that will receive the events. Copy its **Project ID**.
-2. Go to **APIs & Services → Library**, search for **Cloud Pub/Sub API**, and enable it.
-
-### 2. Topics and subscriptions
-
-For each name in [Pub/Sub topics](#pubsub-topics):
-
-1. Go to **Pub/Sub → Topics → Create topic**.
-2. Set **Topic ID** to that exact name (for example `db-inventory.inventory.customers`). Leave the other topic settings at their defaults.
-3. Open the topic and choose **Create subscription**.
-4. Set **Subscription ID** to the same name as the topic.
-5. Set **Delivery type** to **Pull**.
-6. Set **Message retention duration** to **7 days**, so unread change events stay available for a week.
-7. Set **Expiration period** to **Never expire**. A quiet PoC subscription would otherwise be deleted after inactivity.
-
-Your user account needs permission to view those subscriptions (a project Owner or Editor already has it). Pull messages from the subscription page to watch the stream.
-
-### 3. Service account
-
-1. Go to **IAM & Admin → Service Accounts → Create service account**.
-2. Name it something like `debezium-pubsub-publisher`.
-3. Grant the role **Pub/Sub Publisher** (`roles/pubsub.publisher`) on this project.
-4. Open the new account, go to **Keys → Add key → Create new key → JSON**, and download the key.
-5. Move the JSON file to `postgresql-debezium/keys/`. That directory is gitignored. Do not commit the key.
-
-### 4. Point Compose at your project
-
-In `postgresql-debezium/docker-compose.yml`, set:
-
-- `debezium.sink.pubsub.project.id` to the Project ID from step 1
-- `GOOGLE_APPLICATION_CREDENTIALS` to `/keys/` plus the JSON file name
-
-The Compose file bind-mounts `postgresql-debezium/keys` at `/keys` inside the Debezium container. The sample values in the file (`datapool-prt-dsi-dev` and `sa-datapool-prt-dsi-dev.json`) are placeholders from an earlier environment.
-
 ## Running this example
 
 From the project root:
 
 ```
-docker-compose -f postgresql-debezium/docker-compose.yml up
+docker compose -f postgresql-debezium/docker-compose.yml up
 ```
 
-Inserts, updates, and deletes in the `inventory` schema are published to the topics above. Open each subscription in the console and pull messages to see them.
+Compose starts five pieces:
 
-To explore the PostgreSQL inventory database open `http://localhost:8080` in a browser
-and fill the following values: `System -> PostgreSQL`, `Server -> db-inventory`,
-`Username -> postgres`, `Password -> example` and `Database -> postgres`. After login
-you need to choose `Schema -> inventory`.
+- `db-inventory` — `debezium/example-postgres:3.0.0.Final`, the inventory database
+- `adminer` — database UI on port 8080
+- `pubsub-emulator` — Pub/Sub emulator on port 8085, project `local-debezium`
+- `pubsub-init` — creates the topics and pull subscriptions, then exits
+- `debezium` — `debezium/server:3.0.0.Final`, which streams the `inventory` schema
+
+Wait until the Debezium log says `Processing messages`. The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
+
+Debezium reads configuration from environment variables whose names are the property in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
+
+To explore the inventory database open `http://localhost:8080` and fill in `System -> PostgreSQL`, `Server -> db-inventory`, `Username -> postgres`, `Password -> example`, and `Database -> postgres`. After login choose `Schema -> inventory`.
+
+To confirm a change from the shell:
+
+```
+docker exec postgresql-debezium-db-inventory-1 \
+  psql -U postgres -d postgres \
+  -c "INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');"
+
+curl -s -X POST \
+  "http://localhost:8085/v1/projects/local-debezium/subscriptions/db-inventory.inventory.customers:pull" \
+  -H "Content-Type: application/json" \
+  -d '{"maxMessages":10}'
+```
+
+A new row is an event with `"op":"c"`. The first snapshot of existing rows uses `"op":"r"`.
 
 ## Pub/Sub topics
 
-There is one topic, and one pull subscription of the same name, for each table Debezium watches:
+`pubsub-init` creates one topic and one pull subscription of the same name for each table in the `inventory` schema:
 
 - db-inventory.inventory.customers
-- db-inventory.inventory.geography_columns
 - db-inventory.inventory.geom
-- db-inventory.inventory.geometry_columns
 - db-inventory.inventory.orders
 - db-inventory.inventory.products
 - db-inventory.inventory.products_on_hand
-- db-inventory.inventory.raster_columns
-- db-inventory.inventory.raster_overviews
-- db-inventory.inventory.spatial_ref_sys
+
+Subscriptions keep messages for 7 days. The emulator listens on `localhost:8085`.
+
+## Publish to a Google Cloud project
+
+To send events to a real project instead of the emulator:
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/), select the project, and copy its **Project ID**.
+2. Go to **APIs & Services → Library**, search for **Cloud Pub/Sub API**, and enable it.
+3. Create each topic in [Pub/Sub topics](#pubsub-topics). For each topic, create a **Pull** subscription with the same id, **Message retention duration** of **7 days**, and **Expiration period** set to **Never expire**.
+4. Go to **IAM & Admin → Service Accounts → Create service account**. Grant **Pub/Sub Publisher** (`roles/pubsub.publisher`). Create a JSON key and save it under `postgresql-debezium/keys/`. That directory is gitignored.
+5. In `postgresql-debezium/docker-compose.yml`, on the `debezium` service:
+   - Set `DEBEZIUM_SINK_PUBSUB_PROJECT_ID` to the Project ID.
+   - Remove `DEBEZIUM_SINK_PUBSUB_ADDRESS`.
+   - Mount the key read-only and set `GOOGLE_APPLICATION_CREDENTIALS` to `/keys/` plus the file name.
+6. Stop the `pubsub-emulator` and `pubsub-init` services, then start Compose again.
 
 ## Trunk-based development
 

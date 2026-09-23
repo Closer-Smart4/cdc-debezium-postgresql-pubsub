@@ -1,0 +1,29 @@
+/.pytest_cache/
+__pycache__/
+
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+Pipfile
+*.lock
+*.swp
+build/
+dist/
+
+# VS Code
+workspace.code-workspace
+.vscode/
+.vscode/settings.json
+
+# virtual environment
+/venv/
+
+# pydoc-markdown
+docs/mkdocs.yml
+docs/.generated-files.txt
+
+# keys to GOGOLE
+keys/

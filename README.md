@@ -54,7 +54,17 @@ The emulator does not create topics when the first message arrives, so Debezium 
 
 Debezium reads configuration from environment variables whose names are the property in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
 
-To explore the inventory database open `http://localhost:8080` and fill in `System -> PostgreSQL`, `Server -> db-inventory`, `Username -> postgres`, `Password -> example`, and `Database -> postgres`. After login choose `Schema -> inventory`.
+Open Adminer at `http://localhost:8080` and log in with:
+
+| Field | Value |
+| --- | --- |
+| System | PostgreSQL |
+| Server | `db-inventory` |
+| Username | `postgres` |
+| Password | `example` |
+| Database | `postgres` |
+
+After login choose `Schema -> inventory`.
 
 To confirm a change from the shell:
 

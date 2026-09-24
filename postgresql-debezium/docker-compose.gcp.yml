@@ -9,6 +9,8 @@ services:
     profiles: ["emulator"]
 
   debezium:
+    # The credentials file is mode 600. The image user jboss cannot read it.
+    user: "${UID:-1000}:${GID:-1000}"
     depends_on: !override
       db-inventory:
         condition: service_started

@@ -23,6 +23,15 @@ if [ -z "$GCP_PROJECT_ID" ] || [ "$GCP_PROJECT_ID" = "your-gcp-project-id" ]; th
   exit 1
 fi
 
+echo "Current customers in ${GCP_PROJECT_ID}.debezium_cdc.customers_current"
+bq --project_id="$GCP_PROJECT_ID" query \
+  --use_legacy_sql=false \
+  --location="$BQ_LOCATION" \
+  --format=pretty \
+  "SELECT id, first_name, last_name, email
+   FROM \`${GCP_PROJECT_ID}.debezium_cdc.customers_current\`
+   ORDER BY id"
+
 echo "Latest rows in ${GCP_PROJECT_ID}.debezium_cdc.customers"
 bq --project_id="$GCP_PROJECT_ID" query \
   --use_legacy_sql=false \

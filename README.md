@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.6.0
+Version: 0.6.1
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -11,9 +11,7 @@ CDC stands for [Change Data Capture](https://en.wikipedia.org/wiki/Change_data_c
 
 [Debezium](https://debezium.io/) is an open source distributed platform for change data capture. Start it up, point it at your databases, and your apps can start responding to all of the inserts, updates, and deletes that other apps commit to your databases. Debezium is durable and fast, so your apps can respond quickly and never miss an event, even when things go wrong.
 
-![Architecture](architecture/postgres_debezium_pubsub.png)
-
-Debezium Server reads the PostgreSQL write-ahead log and publishes each change to a Pub/Sub topic named `{topic.prefix}.{schema}.{table}`. In this PoC the topic prefix is `db-inventory` and the schema is `inventory`.
+Debezium Server reads the PostgreSQL write-ahead log and publishes each change to a Pub/Sub topic named `{topic.prefix}.{schema}.{table}`. In this PoC the topic prefix is `db-inventory` and the schema is `inventory`. Debezium captures five tables: `customers`, `geom`, `orders`, `products`, and `products_on_hand`.
 
 There are two ways to run it:
 
@@ -36,6 +34,23 @@ python3 -m venv .venv
 - Optional: the Google Cloud CLI (`gcloud` and `bq`). The emulator does not need it. The [complete solution](#run-the-complete-solution) does. Install steps are in [Install the Google Cloud CLI](#1-install-the-google-cloud-cli).
 
 ## Run the emulator
+
+```mermaid
+flowchart LR
+  subgraph compose["Docker Compose"]
+    adminer["Adminer<br/>localhost:8080"] --> db["PostgreSQL<br/>schema inventory"]
+    db -->|"write-ahead log"| debezium["Debezium Server"]
+    init["pubsub-init"] -->|"creates each topic<br/>and its pull subscription"| emu["Pub/Sub emulator<br/>localhost:8085<br/>project local-debezium"]
+    debezium --> emu
+  end
+  emu --> customers["db-inventory.inventory.customers"]
+  emu --> geom["db-inventory.inventory.geom"]
+  emu --> orders["db-inventory.inventory.orders"]
+  emu --> products["db-inventory.inventory.products"]
+  emu --> hand["db-inventory.inventory.products_on_hand"]
+```
+
+Each topic has one pull subscription of the same name. Nothing is created in Google Cloud.
 
 From the project root:
 
@@ -123,7 +138,30 @@ Subscriptions keep messages for 7 days. The emulator listens on `localhost:8085`
 
 ## Run the complete solution
 
-This path uses a Google Cloud project with billing enabled. An insert into `inventory.customers` is published by Debezium, stored in BigQuery, and logged by a second subscription on that same topic.
+```mermaid
+flowchart LR
+  subgraph compose["Docker Compose"]
+    adminer["Adminer<br/>localhost:8080"] --> db["PostgreSQL<br/>schema inventory"]
+    db -->|"write-ahead log"| debezium["Debezium Server"]
+  end
+  subgraph gcp["Google Cloud"]
+    customers["db-inventory.inventory.customers"]
+    others["geom, orders, products,<br/>products_on_hand"]
+    bqsub["db-inventory.inventory.customers-bq"]
+    notify["db-inventory.inventory.customers-notify"]
+    table["BigQuery table<br/>debezium_cdc.customers_changes"]
+    view["view<br/>debezium_cdc.customers"]
+    fn["Cloud Function<br/>notify-customer-change"]
+    pull["one pull subscription<br/>per topic, same name"]
+  end
+  debezium --> customers
+  debezium --> others
+  customers --> bqsub --> table --> view
+  customers --> notify --> fn
+  others --> pull
+```
+
+This path uses a Google Cloud project with billing enabled. An insert into `inventory.customers` is published by Debezium, stored in BigQuery, and logged by a second subscription on that same topic. The emulator does not start.
 
 | Topic | Subscriptions |
 | --- | --- |
@@ -132,8 +170,6 @@ This path uses a Google Cloud project with billing enabled. An insert into `inve
 | `db-inventory.inventory.orders` | one pull subscription of the same name |
 | `db-inventory.inventory.products` | one pull subscription of the same name |
 | `db-inventory.inventory.products_on_hand` | one pull subscription of the same name |
-
-The picture at the top of this page still names extra PostGIS topics. Debezium captures the five tables above.
 
 ### 1. Install the Google Cloud CLI
 

@@ -6,8 +6,7 @@ PoC that streams PostgreSQL changes to Pub/Sub with [Debezium Server](https://de
 
 - Change the PoC, its Compose file, docs, and the Cursor commands under `.cursor/commands/`.
 - The default stack uses the Pub/Sub emulator (`docker-compose.yml` alone). The complete path is documented step by step in `README.md`: `scripts/gcp-setup.sh` creates the five topics, `docker-compose.gcp.yml` points Debezium at the project, and `scripts/gcp-show.sh` prints the BigQuery rows and the notify log. Four topics have one pull subscription. `db-inventory.inventory.customers` has the BigQuery subscription and the notify push subscription. `GCP_CREDENTIALS_FILE` in `postgresql-debezium/gcp.env` is the publisher credential. It is a service account key when the project allows one, and the signed-in user's application-default credentials when key creation is blocked.
-- `infra/` is leftover Pulumi and Cloud Build from another approach. Leave it untouched until the user asks to delete it. Do not import it, extend it, or add Pulumi, Terraform, or another deploy pipeline.
-- `__main__.py` only starts that leftover Pulumi program. Do not grow it.
+- Do not add Pulumi, Terraform, or another deploy pipeline. Cloud resources are created by `scripts/gcp-setup.sh`.
 
 ## Secrets
 
@@ -42,7 +41,7 @@ These commands were copied from another repo and adapted here:
 
 - Version bumps use `.venv/bin/bumpversion --config-file .bumpversion.cfg <part>`. Python tools run from the project `.venv`.
 - An origin authentication failure stops the command. Leave git config and SSH keys as they are.
-- `.venv/bin/mypy` applies to PoC Python. Skip `infra/`.
+- `.venv/bin/mypy` applies to PoC Python.
 
 ## Versions
 
@@ -56,7 +55,7 @@ Every pull request includes one bump, made by bumpversion, not by hand. If sever
 
 ## Python
 
-Format PoC Python with `.venv/bin/autopep8` and check it with `.venv/bin/mypy` before committing. Type-annotate new Python. Do not format or type-check `infra/`.
+Format PoC Python with `.venv/bin/autopep8` and check it with `.venv/bin/mypy` before committing. Type-annotate new Python.
 
 ## When docs and Compose drift
 

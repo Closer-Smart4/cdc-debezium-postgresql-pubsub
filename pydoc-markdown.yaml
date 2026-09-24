@@ -1,6 +1,6 @@
 loaders:
   - type: python
-    search_path: [,]
+    search_path: [scripts/notify]
 processors:
   - type: filter
     skip_empty_modules: true
@@ -14,7 +14,7 @@ renderer:
     source: README.md
   - title: PoC for Debezium streaming to Pub/Sub
     contents:
-    - app.*
+    - main
   mkdocs_config:
     site_name: "PoC for Debezium streaming to Pub/Sub"
     theme: readthedocs

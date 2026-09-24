@@ -1,15 +1,8 @@
 # PoC for Debezium CDC
 
-Version: 0.7.1
+Version: 0.7.2
 
-This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
-topics using Debezium.
-
-CDC stands for [Change Data Capture](https://en.wikipedia.org/wiki/Change_data_capture), from Wikipedia:
-
->In databases, change data capture (CDC) is a set of software design patterns used to determine and track the data that has changed so that action can be taken using the changed data.
-
-[Debezium](https://debezium.io/) is an open source distributed platform for change data capture. Start it up, point it at your databases, and your apps can start responding to all of the inserts, updates, and deletes that other apps commit to your databases. Debezium is durable and fast, so your apps can respond quickly and never miss an event, even when things go wrong.
+This project shows [change data capture](https://en.wikipedia.org/wiki/Change_data_capture) from a PostgreSQL database to Pub/Sub topics using [Debezium](https://debezium.io/).
 
 Debezium Server reads the PostgreSQL write-ahead log and publishes each change to a Pub/Sub topic named `{topic.prefix}.{schema}.{table}`. In this PoC the topic prefix is `db-inventory` and the schema is `inventory`. Debezium captures five tables: `customers`, `geom`, `orders`, `products`, and `products_on_hand`.
 
@@ -74,7 +67,7 @@ sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml logs -f d
 
 The emulator does not create topics when the first message arrives, so Debezium stays stopped until `pubsub-init` has finished. Images are pinned to Debezium `3.0.0.Final` because that is the newest tag still published on Docker Hub.
 
-Debezium reads configuration from environment variables whose names are the property in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
+Debezium reads configuration from environment variables. Each name is the property name in upper case, with dots turned into underscores. `debezium.sink.type` is `DEBEZIUM_SINK_TYPE`.
 
 Open Adminer at `http://localhost:8080` and log in with:
 
@@ -110,31 +103,22 @@ for message in data.get("receivedMessages", []):
 
 `op` is `r` for a row from the first snapshot and `c` for a row inserted later. `after` is the row Debezium sent. The first `customers` snapshot looks like this:
 
-| id | name | email |
-| --- | --- | --- |
-| 1001 | Sally Thomas | sally.thomas@acme.com |
-| 1002 | George Bailey | gbailey@foobar.com |
-| 1003 | Edward Walker | ed@walker.com |
+| id | first_name | last_name | email |
+| --- | --- | --- | --- |
+| 1001 | Sally | Thomas | sally.thomas@acme.com |
+| 1002 | George | Bailey | gbailey@foobar.com |
+| 1003 | Edward | Walker | ed@walker.com |
+| 1004 | Anne | Kretchmar | annek@noanswer.org |
 
 The same pull works for the other tables. Change `customers` in the URL to `orders`, `products`, `products_on_hand`, or `geom`.
 
-To confirm a new row, insert through the `db-inventory` service, then pull again. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket. The next pull shows `"op": "c"` and the new name in `after`. The same insert done in Adminer shows up the same way.
+The pull does not acknowledge the messages. The ack deadline is 20 seconds, so the same rows come back on the next pull, together with any insert made after the snapshot. Subscriptions keep messages for 7 days.
+
+To confirm a new row, insert through the `db-inventory` service, then pull again. `sg docker` uses the Docker group for that command, so it does not ask for a password. The generated container name is not stable across shells that cannot see the Docker socket. The new row has `"op": "c"`. `after` contains `first_name`, `last_name`, and `email`. The same insert done in Adminer shows up the same way.
 
 ```
 sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-inventory psql -U postgres -d postgres -c \"INSERT INTO inventory.customers (first_name, last_name, email) VALUES ('Ada', 'Lovelace', 'ada@example.com');\""
 ```
-
-## Pub/Sub topics
-
-`pubsub-init` creates one topic and one pull subscription of the same name for each table in the `inventory` schema:
-
-- db-inventory.inventory.customers
-- db-inventory.inventory.geom
-- db-inventory.inventory.orders
-- db-inventory.inventory.products
-- db-inventory.inventory.products_on_hand
-
-Subscriptions keep messages for 7 days. The emulator listens on `localhost:8085`.
 
 ## Run the complete solution
 
@@ -166,7 +150,7 @@ This path uses a Google Cloud project with billing enabled. An insert into `inve
 
 | Topic | Subscriptions |
 | --- | --- |
-| `db-inventory.inventory.customers` | `db-inventory.inventory.customers-bq` writes the raw message to `debezium_cdc.customers_changes`. View `debezium_cdc.customers` reads `op` and the row out of that JSON. `db-inventory.inventory.customers-notify` pushes the same message to `notify-customer-change`, which logs the change and upserts `debezium_cdc.customers_current` (`id`, `first_name`, `last_name`, `email`). |
+| `db-inventory.inventory.customers` | `db-inventory.inventory.customers-bq` writes the raw message to `debezium_cdc.customers_changes`. `db-inventory.inventory.customers-notify` logs the change and updates `debezium_cdc.customers_current`. |
 | `db-inventory.inventory.geom` | one pull subscription of the same name |
 | `db-inventory.inventory.orders` | one pull subscription of the same name |
 | `db-inventory.inventory.products` | one pull subscription of the same name |
@@ -223,6 +207,8 @@ scripts/gcp-setup.sh
 
 `gcloud auth application-default login` exits with `Scope has changed` on current Cloud SDK releases and does not save the file.
 
+If Debezium later exits with `invalid_grant` or `invalid_rapt`, that saved login has expired. Run `gcloud beta auth login --update-adc` again, then recreate the Debezium container.
+
 The key directory is gitignored. The first function deploy can take several minutes.
 
 ### 4. Start Debezium against the project
@@ -231,10 +217,10 @@ Stop the emulator stack if it is running, then start Compose with both files. Th
 
 ```
 sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml down"
-sg docker -c "docker compose --env-file postgresql-debezium/gcp.env -f postgresql-debezium/docker-compose.yml -f postgresql-debezium/docker-compose.gcp.yml up"
+sg docker -c "UID=$(id -u) GID=$(id -g) docker compose --env-file postgresql-debezium/gcp.env -f postgresql-debezium/docker-compose.yml -f postgresql-debezium/docker-compose.gcp.yml up"
 ```
 
-Wait until the Debezium log says `Processing messages`. Compose runs that container as your user so it can read `GCP_CREDENTIALS_FILE`. A new container has no offset file, so Debezium first sends the customers that are already in the database (`op` is `r`).
+Wait until the Debezium log says `Processing messages`. `UID` and `GID` make that container run as your user so it can read `GCP_CREDENTIALS_FILE`. Without them Compose uses `1000:1000`. A new container has no offset file, so Debezium first sends the customers that are already in the database (`op` is `r`).
 
 ### 5. Insert a customer
 
@@ -246,13 +232,13 @@ sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml exec db-i
 
 ### 6. Read BigQuery and the notify log
 
-BigQuery can take about a minute to show a new row. Then, from the project root:
+From the project root:
 
 ```
 scripts/gcp-show.sh
 ```
 
-`debezium_cdc.customers_current` has one row per customer, with the same columns as `inventory.customers`: `id`, `first_name`, `last_name`, and `email`. The view `debezium_cdc.customers` lists each change, including `op`. The insert from step 5 has `op` `c`. Below that, the function log prints the same change as one line, for example `op=c id=1005 Ada Lovelace ada@example.com`.
+`debezium_cdc.customers_changes` can take about a minute to show a new row. The view `debezium_cdc.customers` lists each change, including `op`. `debezium_cdc.customers_current` has one row per customer (`id`, `first_name`, `last_name`, `email`). `notify-customer-change` upserts that row on an insert, snapshot, or update, and deletes it when PostgreSQL deletes the customer. If the function fails, the changelog still has the message and `customers_current` stays unchanged. The insert from step 5 has `op` `c` and id `1005`. Below that, the function log prints the same change as one line, for example `op=c id=1005 Ada Lovelace ada@example.com`.
 
 ### 7. Return to the emulator
 
@@ -285,15 +271,13 @@ This repo uses [semantic versioning](https://semver.org/). Every pull request bu
 
 ## Generate project documentation
 
-To generate documentation on your local machine run on the project's root:
+From the project root:
 
 ```
 pydoc-markdown
 ```
 
-The above command uses configurations stored on file `pydoc-markdown.yaml`. Documentation
-will be created in folder `docs`. Refer to [pydoc-markdown](https://pypi.org/project/pydoc-markdown/)
-for more information.
+The configuration is in `pydoc-markdown.yaml`. It includes this README and `scripts/notify/main.py`. Documentation is written to `docs`. Refer to [pydoc-markdown](https://pypi.org/project/pydoc-markdown/) for more information.
 
 ## Pep8 compliant code
 

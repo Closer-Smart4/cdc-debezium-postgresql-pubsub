@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.7.3
+Version: 0.7.4
 
 This project shows [change data capture](https://en.wikipedia.org/wiki/Change_data_capture) from a PostgreSQL database to Pub/Sub topics using [Debezium](https://debezium.io/).
 
@@ -10,8 +10,6 @@ There are two ways to run it:
 
 1. [Run the emulator](#run-the-emulator). Nothing is created in Google Cloud. One pull subscription per topic.
 2. [Run the complete solution](#run-the-complete-solution). The same five topics in a real project. `db-inventory.inventory.customers` has two subscriptions: one writes the raw message to BigQuery, and one logs the change and keeps a table with the same columns as PostgreSQL.
-
-The `infra/` folder is leftover from an earlier Pulumi and Cloud Build setup and will be removed.
 
 ## Prerequisites
 
@@ -287,7 +285,7 @@ Format PoC Python with [autopep8](https://pypi.org/project/autopep8/) from the p
 .venv/bin/autopep8 --in-place --exit-code --verbose path/to/module.py
 ```
 
-It reformats code non-aggressively. Skip `infra/` until that folder is deleted.
+It reformats code non-aggressively.
 
 ## Type check
 
@@ -297,4 +295,4 @@ Type check PoC Python with [mypy](http://www.mypy-lang.org/) from the project ro
 .venv/bin/mypy path/to/module.py
 ```
 
-Skip `infra/`. New Python in this repo is type-annotated.
+New Python in this repo is type-annotated.

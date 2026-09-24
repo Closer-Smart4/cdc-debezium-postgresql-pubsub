@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.7.2
+Version: 0.7.3
 
 This project shows [change data capture](https://en.wikipedia.org/wiki/Change_data_capture) from a PostgreSQL database to Pub/Sub topics using [Debezium](https://debezium.io/).
 
@@ -129,15 +129,15 @@ flowchart LR
     db -->|"write-ahead log"| debezium["Debezium Server"]
   end
   subgraph gcp["Google Cloud"]
-    customers["db-inventory.inventory.customers"]
-    others["geom, orders, products,<br/>products_on_hand"]
-    bqsub["db-inventory.inventory.customers-bq"]
-    notify["db-inventory.inventory.customers-notify"]
+    customers["Pub/Sub topic<br/>db-inventory.inventory.customers"]
+    others["Pub/Sub topics<br/>geom, orders, products,<br/>products_on_hand"]
+    bqsub["BigQuery subscription<br/>db-inventory.inventory.customers-bq"]
+    notify["Push subscription<br/>db-inventory.inventory.customers-notify"]
     table["BigQuery table<br/>debezium_cdc.customers_changes"]
-    view["view<br/>debezium_cdc.customers"]
+    view["BigQuery view<br/>debezium_cdc.customers"]
     fn["Cloud Function<br/>notify-customer-change"]
     current["BigQuery table<br/>debezium_cdc.customers_current"]
-    pull["one pull subscription<br/>per topic, same name"]
+    pull["Pull subscription<br/>one per topic, same name"]
   end
   debezium --> customers
   debezium --> others

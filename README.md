@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.6.1
+Version: 0.7.0
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -16,7 +16,7 @@ Debezium Server reads the PostgreSQL write-ahead log and publishes each change t
 There are two ways to run it:
 
 1. [Run the emulator](#run-the-emulator). Nothing is created in Google Cloud. One pull subscription per topic.
-2. [Run the complete solution](#run-the-complete-solution). The same five topics in a real project. `db-inventory.inventory.customers` has two subscriptions: one writes the row to BigQuery, and one logs the change.
+2. [Run the complete solution](#run-the-complete-solution). The same five topics in a real project. `db-inventory.inventory.customers` has two subscriptions: one writes the raw message to BigQuery, and one logs the change and keeps a table with the same columns as PostgreSQL.
 
 The `infra/` folder is leftover from an earlier Pulumi and Cloud Build setup and will be removed.
 
@@ -152,12 +152,13 @@ flowchart LR
     table["BigQuery table<br/>debezium_cdc.customers_changes"]
     view["view<br/>debezium_cdc.customers"]
     fn["Cloud Function<br/>notify-customer-change"]
+    current["BigQuery table<br/>debezium_cdc.customers_current"]
     pull["one pull subscription<br/>per topic, same name"]
   end
   debezium --> customers
   debezium --> others
   customers --> bqsub --> table --> view
-  customers --> notify --> fn
+  customers --> notify --> fn --> current
   others --> pull
 ```
 
@@ -165,7 +166,7 @@ This path uses a Google Cloud project with billing enabled. An insert into `inve
 
 | Topic | Subscriptions |
 | --- | --- |
-| `db-inventory.inventory.customers` | `db-inventory.inventory.customers-bq` writes the message to BigQuery view `debezium_cdc.customers`. `db-inventory.inventory.customers-notify` pushes it to `notify-customer-change`, which logs `op`, `id`, and the name. |
+| `db-inventory.inventory.customers` | `db-inventory.inventory.customers-bq` writes the raw message to `debezium_cdc.customers_changes`. View `debezium_cdc.customers` reads `op` and the row out of that JSON. `db-inventory.inventory.customers-notify` pushes the same message to `notify-customer-change`, which logs the change and upserts `debezium_cdc.customers_current` (`id`, `first_name`, `last_name`, `email`). |
 | `db-inventory.inventory.geom` | one pull subscription of the same name |
 | `db-inventory.inventory.orders` | one pull subscription of the same name |
 | `db-inventory.inventory.products` | one pull subscription of the same name |
@@ -251,7 +252,7 @@ BigQuery can take about a minute to show a new row. Then, from the project root:
 scripts/gcp-show.sh
 ```
 
-The table lists `op`, `id`, `first_name`, `last_name`, and `email`. The insert from step 5 has `op` `c`. Below that, the function log prints the same change as one line, for example `op=c id=1005 Ada Lovelace ada@example.com`.
+`debezium_cdc.customers_current` has one row per customer, with the same columns as `inventory.customers`: `id`, `first_name`, `last_name`, and `email`. The view `debezium_cdc.customers` lists each change, including `op`. The insert from step 5 has `op` `c`. Below that, the function log prints the same change as one line, for example `op=c id=1005 Ada Lovelace ada@example.com`.
 
 ### 7. Return to the emulator
 

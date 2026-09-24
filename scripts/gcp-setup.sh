@@ -3,7 +3,9 @@
 #
 # Five topics, one per inventory table. Four of them have a single pull
 # subscription. db-inventory.inventory.customers has two subscriptions:
-# one writes the message into BigQuery, and one pushes it to the notify function.
+# one writes the raw message into BigQuery, and one pushes it to the notify
+# function. The function logs the change and keeps customers_current aligned
+# with the PostgreSQL customers table.
 #
 # Requires a logged-in gcloud user who can create resources in the project.
 # The JSON key written for Debezium is gitignored.
@@ -78,6 +80,7 @@ BQ_SUBSCRIPTION="db-inventory.inventory.customers-bq"
 NOTIFY_SUBSCRIPTION="db-inventory.inventory.customers-notify"
 DATASET="debezium_cdc"
 TABLE="customers_changes"
+MIRROR_TABLE="customers_current"
 PUBLISHER_SA="debezium-publisher"
 PUSH_SA="pubsub-push"
 FUNCTION="notify-customer-change"
@@ -212,6 +215,58 @@ SELECT
   JSON_VALUE(data, '$.payload.after.last_name') AS last_name,
   JSON_VALUE(data, '$.payload.after.email') AS email
 FROM \`${PROJECT}.${DATASET}.${TABLE}\`;
+CREATE TABLE IF NOT EXISTS \`${PROJECT}.${DATASET}.${MIRROR_TABLE}\` (
+  id INT64 NOT NULL,
+  first_name STRING NOT NULL,
+  last_name STRING NOT NULL,
+  email STRING NOT NULL
+);
+MERGE \`${PROJECT}.${DATASET}.${MIRROR_TABLE}\` T
+USING (
+  SELECT id, first_name, last_name, email
+  FROM (
+    SELECT
+      JSON_VALUE(data, '$.payload.op') AS op,
+      SAFE_CAST(JSON_VALUE(data, '$.payload.after.id') AS INT64) AS id,
+      IFNULL(JSON_VALUE(data, '$.payload.after.first_name'), '') AS first_name,
+      IFNULL(JSON_VALUE(data, '$.payload.after.last_name'), '') AS last_name,
+      IFNULL(JSON_VALUE(data, '$.payload.after.email'), '') AS email,
+      ROW_NUMBER() OVER (
+        PARTITION BY JSON_VALUE(data, '$.payload.after.id')
+        ORDER BY publish_time DESC
+      ) AS rn
+    FROM \`${PROJECT}.${DATASET}.${TABLE}\`
+    WHERE JSON_VALUE(data, '$.payload.op') != 'd'
+  )
+  WHERE rn = 1 AND id IS NOT NULL
+) S
+ON T.id = S.id
+WHEN MATCHED THEN
+  UPDATE SET first_name = S.first_name, last_name = S.last_name, email = S.email
+WHEN NOT MATCHED THEN
+  INSERT (id, first_name, last_name, email)
+  VALUES (S.id, S.first_name, S.last_name, S.email);
+DELETE FROM \`${PROJECT}.${DATASET}.${MIRROR_TABLE}\`
+WHERE CAST(id AS STRING) IN (
+  SELECT id
+  FROM (
+    SELECT
+      JSON_VALUE(data, '$.payload.op') AS op,
+      COALESCE(
+        JSON_VALUE(data, '$.payload.before.id'),
+        JSON_VALUE(data, '$.payload.after.id')
+      ) AS id,
+      ROW_NUMBER() OVER (
+        PARTITION BY COALESCE(
+          JSON_VALUE(data, '$.payload.before.id'),
+          JSON_VALUE(data, '$.payload.after.id')
+        )
+        ORDER BY publish_time DESC
+      ) AS rn
+    FROM \`${PROJECT}.${DATASET}.${TABLE}\`
+  )
+  WHERE rn = 1 AND op = 'd'
+);
 "
 
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
@@ -248,6 +303,15 @@ gcloud projects add-iam-policy-binding "$PROJECT" \
   --member="serviceAccount:${COMPUTE_SA}" \
   --role="roles/cloudbuild.builds.builder" \
   --quiet >/dev/null
+echo "Granting ${COMPUTE_SA} access to write ${MIRROR_TABLE}"
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="serviceAccount:${COMPUTE_SA}" \
+  --role="roles/bigquery.dataEditor" \
+  --quiet >/dev/null
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="serviceAccount:${COMPUTE_SA}" \
+  --role="roles/bigquery.jobUser" \
+  --quiet >/dev/null
 
 echo "Deploying ${FUNCTION}"
 gcloud functions deploy "$FUNCTION" \
@@ -259,6 +323,7 @@ gcloud functions deploy "$FUNCTION" \
   --entry-point=notify_customer_change \
   --trigger-http \
   --no-allow-unauthenticated \
+  --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET=${DATASET},BQ_TABLE=${MIRROR_TABLE},BQ_LOCATION=${LOCATION}" \
   --quiet
 
 PUSH_EMAIL="${PUSH_SA}@${PROJECT}.iam.gserviceaccount.com"
@@ -308,5 +373,5 @@ echo "Wrote ${ENV_FILE}"
 
 echo "Customers topic ${CUSTOMERS_TOPIC} has two subscriptions:"
 echo "  ${BQ_SUBSCRIPTION} -> ${PROJECT}.${DATASET}.${TABLE}"
-echo "  ${NOTIFY_SUBSCRIPTION} -> ${FUNCTION}"
+echo "  ${NOTIFY_SUBSCRIPTION} -> ${FUNCTION} -> ${PROJECT}.${DATASET}.${MIRROR_TABLE}"
 echo "The other four topics each have one pull subscription of the same name."

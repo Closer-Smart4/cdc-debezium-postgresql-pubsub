@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.6.1
+Version: 0.6.2
 
 This project is a PoC that shows how to do CDC from a PostgreSQL database to Pub/Sub
 topics using Debezium.
@@ -233,7 +233,7 @@ sg docker -c "docker compose -f postgresql-debezium/docker-compose.yml down"
 sg docker -c "docker compose --env-file postgresql-debezium/gcp.env -f postgresql-debezium/docker-compose.yml -f postgresql-debezium/docker-compose.gcp.yml up"
 ```
 
-Wait until the Debezium log says `Processing messages`. A new container has no offset file, so Debezium first sends the customers that are already in the database (`op` is `r`).
+Wait until the Debezium log says `Processing messages`. Compose runs that container as your user so it can read `GCP_CREDENTIALS_FILE`. A new container has no offset file, so Debezium first sends the customers that are already in the database (`op` is `r`).
 
 ### 5. Insert a customer
 

@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.7.4
+Version: 0.7.5
 
 This project shows [change data capture](https://en.wikipedia.org/wiki/Change_data_capture) from a PostgreSQL database to Pub/Sub topics using [Debezium](https://debezium.io/).
 
@@ -296,3 +296,11 @@ Type check PoC Python with [mypy](http://www.mypy-lang.org/) from the project ro
 ```
 
 New Python in this repo is type-annotated.
+
+## Collaborators
+
+- [Ricardo Cristóvão Miranda](https://github.com/RicardoMirandaCloser)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

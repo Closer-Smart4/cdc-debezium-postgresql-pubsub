@@ -1,6 +1,6 @@
 # PoC for Debezium CDC
 
-Version: 0.7.5
+Version: 0.8.0
 
 This project shows [change data capture](https://en.wikipedia.org/wiki/Change_data_capture) from a PostgreSQL database to Pub/Sub topics using [Debezium](https://debezium.io/).
 
